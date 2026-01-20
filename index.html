@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moodboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Inconsolata:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inconsolata', monospace;
+            background: #ffffff;
+            color: #1a1a1a;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* Three.js canvas */
+        #canvas3d {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Input container */
+        .input-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            text-align: center;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .input-container.minimized {
+            top: 60px;
+            left: 50%;
+            transform: translate(-50%, 0);
+        }
+
+        .prompt-text {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 2.5rem;
+            font-weight: 300;
+            color: #1a1a1a;
+            margin-bottom: 2rem;
+            letter-spacing: 0.02em;
+            opacity: 0;
+            animation: fadeIn 1s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+            }
+        }
+
+        .input-container.minimized .prompt-text {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+            width: 600px;
+            max-width: 90vw;
+        }
+
+        #moodInput {
+            width: 100%;
+            padding: 1.25rem 1.5rem;
+            font-family: 'Inconsolata', monospace;
+            font-size: 1.125rem;
+            border: 1px solid #d0d0d0;
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            color: #1a1a1a;
+            outline: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        #moodInput:focus {
+            border-color: #1a1a1a;
+            box-shadow: 0 6px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        #moodInput::placeholder {
+            color: #999;
+        }
+
+        .add-button {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 50%;
+            background: #1a1a1a;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .add-button:hover {
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .add-button:active {
+            transform: translateY(-50%) scale(0.95);
+        }
+
+        /* Item list */
+        .items-list {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 90vw;
+            padding: 0 20px;
+        }
+
+        .item-tag {
+            padding: 0.5rem 1.25rem;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #e0e0e0;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            color: #1a1a1a;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            animation: tagAppear 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        @keyframes tagAppear {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .item-tag:hover {
+            border-color: #1a1a1a;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .item-tag .remove {
+            margin-left: 0.5rem;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+
+        .item-tag:hover .remove {
+            opacity: 1;
+        }
+
+        /* Instructions */
+        .instructions {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0;
+            animation: fadeIn 1s ease-out 0.5s forwards;
+        }
+
+        /* Clear button */
+        .clear-button {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            padding: 0.5rem 1.25rem;
+            background: transparent;
+            border: 1px solid #d0d0d0;
+            border-radius: 50px;
+            font-family: 'Inconsolata', monospace;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0;
+            animation: fadeIn 0.5s ease-out 1s forwards;
+        }
+
+        .clear-button:hover {
+            border-color: #1a1a1a;
+            color: #1a1a1a;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            .prompt-text {
+                font-size: 1.75rem;
+            }
+
+            .input-wrapper {
+                width: 90vw;
+            }
+
+            #moodInput {
+                font-size: 1rem;
+            }
+
+            .items-list {
+                bottom: 20px;
+            }
+
+            .clear-button {
+                top: 20px;
+                right: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas3d"></canvas>
+
+    <div class="instructions">Press enter or click + to add</div>
+    
+    <div class="input-container" id="inputContainer">
+        <div class="prompt-text" id="promptText">What do you want to see on your moodboard?</div>
+        <div class="input-wrapper">
+            <input 
+                type="text" 
+                id="moodInput" 
+                placeholder="Type your idea..."
+                autocomplete="off"
+            />
+            <button class="add-button" id="addButton">+</button>
+        </div>
+    </div>
+
+    <div class="items-list" id="itemsList"></div>
+    
+    <button class="clear-button" id="clearButton">Clear All</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Three.js setup
+        const canvas = document.getElementById('canvas3d');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 15;
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+        scene.add(ambientLight);
+
+        // Store 3D objects
+        const objects3D = [];
+        let itemCount = 0;
+
+        // Keyword to emoji mapping
+        const emojiMap = {
+            // Money & Finance
+            'money': '💵', 'cash': '💵', 'savings': '💰', 'wealth': '💰', 'dollar': '💵',
+            'finance': '💰', 'rich': '💰', 'income': '💵', 'salary': '💵', 'profit': '📈',
+            'investment': '📈', 'stock': '📈', 'bank': '🏦', 'coin': '🪙', 'credit': '💳',
+            
+            // Travel & Vacation
+            'travel': '✈️', 'vacation': '🏝️', 'holiday': '🏝️', 'beach': '🏖️', 'island': '🏝️',
+            'trip': '✈️', 'flight': '✈️', 'passport': '🛂', 'adventure': '🗺️', 'explore': '🧭',
+            'hotel': '🏨', 'camping': '⛺', 'mountain': '⛰️', 'sea': '🌊', 'ocean': '🌊',
+            'cruise': '🚢', 'backpack': '🎒', 'suitcase': '🧳',
+            
+            // Health & Fitness
+            'health': '❤️', 'fitness': '💪', 'gym': '🏋️', 'workout': '💪', 'exercise': '🏃',
+            'run': '🏃', 'yoga': '🧘', 'meditation': '🧘', 'wellness': '🌿', 'diet': '🥗',
+            'nutrition': '🥗', 'weight': '⚖️', 'strength': '💪', 'muscle': '💪',
+            
+            // Career & Education
+            'career': '💼', 'job': '💼', 'work': '💻', 'business': '💼', 'promotion': '📊',
+            'education': '📚', 'school': '🎓', 'college': '🎓', 'study': '📖', 'learn': '📚',
+            'degree': '🎓', 'certificate': '📜', 'training': '📚', 'skills': '🛠️',
+            'office': '🏢', 'meeting': '👔', 'presentation': '📊', 'success': '🏆',
+            
+            // Love & Relationships
+            'love': '❤️', 'relationship': '💕', 'dating': '💑', 'marriage': '💍', 'wedding': '💒',
+            'family': '👨‍👩‍👧‍👦', 'friends': '👥', 'romance': '💕', 'heart': '❤️', 'passion': '🔥',
+            'partner': '💑', 'soulmate': '💕', 'couple': '👫',
+            
+            // Home & Living
+            'home': '🏡', 'house': '🏠', 'apartment': '🏢', 'moving': '📦', 'furniture': '🛋️',
+            'garden': '🌻', 'plant': '🪴', 'decor': '🖼️', 'cozy': '🕯️', 'interior': '🛋️',
+            
+            // Food & Cooking
+            'food': '🍽️', 'cook': '👨‍🍳', 'recipe': '📝', 'restaurant': '🍽️', 'dinner': '🍝',
+            'lunch': '🥗', 'breakfast': '🍳', 'coffee': '☕', 'tea': '🍵', 'wine': '🍷',
+            'dessert': '🍰', 'cake': '🎂', 'pizza': '🍕', 'sushi': '🍣',
+            
+            // Hobbies & Interests
+            'art': '🎨', 'paint': '🎨', 'draw': '✏️', 'music': '🎵', 'guitar': '🎸',
+            'piano': '🎹', 'sing': '🎤', 'dance': '💃', 'photography': '📸', 'camera': '📷',
+            'read': '📖', 'book': '📚', 'write': '✍️', 'blog': '📝', 'gaming': '🎮',
+            'sports': '⚽', 'football': '⚽', 'basketball': '🏀', 'tennis': '🎾',
+            
+            // Nature & Environment
+            'nature': '🌲', 'tree': '🌳', 'forest': '🌲', 'flower': '🌸', 'sun': '☀️',
+            'moon': '🌙', 'star': '⭐', 'sky': '☁️', 'rainbow': '🌈', 'rain': '🌧️',
+            'snow': '❄️', 'winter': '⛄', 'spring': '🌸', 'summer': '☀️', 'fall': '🍂',
+            
+            // Technology
+            'tech': '💻', 'computer': '💻', 'phone': '📱', 'app': '📱', 'code': '👨‍💻',
+            'programming': '👨‍💻', 'software': '💿', 'ai': '🤖', 'robot': '🤖', 'internet': '🌐',
+            
+            // Goals & Achievement
+            'goal': '🎯', 'target': '🎯', 'dream': '💭', 'achievement': '🏆', 'trophy': '🏆',
+            'win': '🥇', 'milestone': '🚩', 'celebrate': '🎉', 'party': '🎊',
+            
+            // Emotions & Mindset
+            'happy': '😊', 'joy': '😄', 'peace': '☮️', 'calm': '😌', 'relax': '😌',
+            'motivation': '🔥', 'inspire': '✨', 'focus': '🎯', 'mindful': '🧘', 'grateful': '🙏',
+            'positive': '✨', 'energy': '⚡', 'power': '💪', 'confidence': '😎',
+            
+            // Creativity
+            'create': '✨', 'creative': '💡', 'idea': '💡', 'innovation': '💡', 'design': '🎨',
+            'imagination': '🌈', 'inspiration': '✨',
+            
+            // Animals & Pets
+            'dog': '🐕', 'cat': '🐱', 'pet': '🐾', 'bird': '🦜', 'fish': '🐠',
+            'horse': '🐴', 'butterfly': '🦋', 'bee': '🐝',
+            
+            // Miscellaneous
+            'car': '🚗', 'bike': '🚴', 'watch': '⌚', 'gift': '🎁', 'shopping': '🛍️',
+            'fashion': '👗', 'style': '👔', 'beauty': '💄', 'makeup': '💅',
+            'movie': '🎬', 'film': '🎥', 'theater': '🎭', 'concert': '🎪',
+            'birthday': '🎂', 'anniversary': '💐', 'christmas': '🎄', 'halloween': '🎃',
+        };
+
+        // Find matching emoji for text
+        function findEmoji(text) {
+            const lowerText = text.toLowerCase();
+            
+            // Check for matches
+            for (const [keyword, emoji] of Object.entries(emojiMap)) {
+                if (lowerText.includes(keyword)) {
+                    return emoji;
+                }
+            }
+            
+            // Default emoji if no match found
+            return '✨';
+        }
+
+        // Create 3D sprite object with emoji
+        function create3DObject(text) {
+            const emoji = findEmoji(text);
+            const size = 3 + Math.random() * 2;
+            
+            // Create canvas for emoji texture
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 512;
+            
+            // Clear canvas
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw emoji
+            context.font = '400px Arial';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(emoji, 256, 256);
+            
+            // Create texture
+            const texture = new THREE.CanvasTexture(canvas);
+            
+            // Create sprite
+            const spriteMaterial = new THREE.SpriteMaterial({ 
+                map: texture,
+                transparent: true
+            });
+            
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(size, size, 1);
+            
+            // Random position in 3D space
+            const radius = 8 + Math.random() * 5;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+            
+            sprite.position.x = radius * Math.sin(phi) * Math.cos(theta);
+            sprite.position.y = radius * Math.sin(phi) * Math.sin(theta);
+            sprite.position.z = radius * Math.cos(phi);
+            
+            // Store animation properties
+            sprite.userData = {
+                text: text,
+                emoji: emoji,
+                floatSpeed: 0.0005 + Math.random() * 0.001,
+                floatOffset: Math.random() * Math.PI * 2,
+                driftX: (Math.random() - 0.5) * 0.01,
+                driftY: (Math.random() - 0.5) * 0.01
+            };
+
+            // Animate in
+            sprite.scale.set(0, 0, 0);
+            animateIn(sprite, size);
+
+            scene.add(sprite);
+            objects3D.push(sprite);
+
+            return sprite;
+        }
+
+        // Animate object appearing
+        function animateIn(sprite, targetSize) {
+            const duration = 800;
+            const startTime = Date.now();
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                
+                sprite.scale.set(
+                    eased * targetSize,
+                    eased * targetSize,
+                    1
+                );
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            }
+            animate();
+        }
+
+        // Animate object disappearing
+        function animateOut(sprite, callback) {
+            const duration = 500;
+            const startTime = Date.now();
+            const startScale = sprite.scale.x;
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - progress;
+                
+                sprite.scale.set(
+                    eased * startScale,
+                    eased * startScale,
+                    1
+                );
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    callback();
+                }
+            }
+            animate();
+        }
+
+        // Add item
+        function addItem() {
+            const input = document.getElementById('moodInput');
+            const text = input.value.trim();
+            
+            if (!text) return;
+
+            console.log('Adding item:', text);
+
+            // Minimize input container after first item
+            if (itemCount === 0) {
+                document.getElementById('inputContainer').classList.add('minimized');
+                document.getElementById('promptText').textContent = 'Add more';
+            }
+
+            // Create 3D object
+            create3DObject(text);
+
+            // Create tag
+            const tag = document.createElement('div');
+            tag.className = 'item-tag';
+            tag.innerHTML = `${text} <span class="remove">×</span>`;
+            tag.dataset.text = text;
+            
+            tag.addEventListener('click', function(e) {
+                removeItem(text, tag);
+            });
+
+            document.getElementById('itemsList').appendChild(tag);
+
+            input.value = '';
+            input.focus();
+            itemCount++;
+        }
+
+        // Remove item
+        function removeItem(text, tag) {
+            // Find and remove 3D object
+            const objectIndex = objects3D.findIndex(obj => obj.userData.text === text);
+            if (objectIndex !== -1) {
+                const object = objects3D[objectIndex];
+                animateOut(object, () => {
+                    scene.remove(object);
+                    object.material.dispose();
+                    object.material.map.dispose();
+                });
+                objects3D.splice(objectIndex, 1);
+            }
+
+            // Remove tag
+            tag.style.animation = 'tagAppear 0.3s reverse';
+            setTimeout(() => tag.remove(), 300);
+
+            itemCount--;
+
+            // Reset input container if no items
+            if (itemCount === 0) {
+                document.getElementById('inputContainer').classList.remove('minimized');
+                document.getElementById('promptText').textContent = 'What do you want to see on your moodboard?';
+            }
+        }
+
+        // Clear all
+        function clearAll() {
+            const itemsToRemove = [...objects3D];
+            itemsToRemove.forEach(object => {
+                animateOut(object, () => {
+                    scene.remove(object);
+                    object.material.dispose();
+                    object.material.map.dispose();
+                });
+            });
+            objects3D.length = 0;
+
+            document.getElementById('itemsList').innerHTML = '';
+            itemCount = 0;
+
+            document.getElementById('inputContainer').classList.remove('minimized');
+            document.getElementById('promptText').textContent = 'What do you want to see on your moodboard?';
+        }
+
+        // Event listeners
+        document.getElementById('addButton').addEventListener('click', addItem);
+        document.getElementById('moodInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addItem();
+            }
+        });
+        document.getElementById('clearButton').addEventListener('click', clearAll);
+
+        // Auto-focus input
+        document.getElementById('moodInput').focus();
+
+        // Mouse interaction and dragging
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetRotationX = 0;
+        let targetRotationY = 0;
+        
+        // Raycaster for object selection
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selectedObject = null;
+        let isDragging = false;
+        let dragPlane = new THREE.Plane();
+        let offset = new THREE.Vector3();
+        let intersection = new THREE.Vector3();
+
+        // Update mouse position
+        function updateMousePosition(e) {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            mouseX = mouse.x;
+            mouseY = mouse.y;
+        }
+
+        // Mouse down - start dragging
+        canvas.addEventListener('mousedown', (e) => {
+            updateMousePosition(e);
+            
+            // Cast ray to find intersected objects
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(objects3D);
+            
+            if (intersects.length > 0) {
+                selectedObject = intersects[0].object;
+                isDragging = true;
+                canvas.style.cursor = 'grabbing';
+                
+                // Calculate the drag plane
+                const normal = camera.position.clone().normalize();
+                dragPlane.setFromNormalAndCoplanarPoint(normal, selectedObject.position);
+                
+                // Calculate offset
+                raycaster.ray.intersectPlane(dragPlane, intersection);
+                offset.copy(intersection).sub(selectedObject.position);
+                
+                e.preventDefault();
+            }
+        });
+
+        // Mouse move - drag object or rotate scene
+        canvas.addEventListener('mousemove', (e) => {
+            updateMousePosition(e);
+            
+            if (isDragging && selectedObject) {
+                // Drag the selected object
+                raycaster.setFromCamera(mouse, camera);
+                raycaster.ray.intersectPlane(dragPlane, intersection);
+                selectedObject.position.copy(intersection.sub(offset));
+            } else {
+                // Rotate scene when not dragging
+                targetRotationY = mouseX * 0.3;
+                targetRotationX = mouseY * 0.3;
+                
+                // Check for hover
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(objects3D);
+                
+                if (intersects.length > 0) {
+                    canvas.style.cursor = 'grab';
+                } else {
+                    canvas.style.cursor = 'default';
+                }
+            }
+        });
+
+        // Mouse up - stop dragging
+        canvas.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                selectedObject = null;
+                canvas.style.cursor = 'default';
+            }
+        });
+
+        // Mouse leave - stop dragging
+        canvas.addEventListener('mouseleave', () => {
+            if (isDragging) {
+                isDragging = false;
+                selectedObject = null;
+                canvas.style.cursor = 'default';
+            }
+        });
+
+        // Touch support for mobile
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(objects3D);
+                
+                if (intersects.length > 0) {
+                    selectedObject = intersects[0].object;
+                    isDragging = true;
+                    
+                    const normal = camera.position.clone().normalize();
+                    dragPlane.setFromNormalAndCoplanarPoint(normal, selectedObject.position);
+                    
+                    raycaster.ray.intersectPlane(dragPlane, intersection);
+                    offset.copy(intersection).sub(selectedObject.position);
+                    
+                    e.preventDefault();
+                }
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (isDragging && selectedObject && e.touches.length === 1) {
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                
+                raycaster.setFromCamera(mouse, camera);
+                raycaster.ray.intersectPlane(dragPlane, intersection);
+                selectedObject.position.copy(intersection.sub(offset));
+                
+                e.preventDefault();
+            }
+        });
+
+        canvas.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                selectedObject = null;
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Only rotate scene when not dragging
+            if (!isDragging) {
+                scene.rotation.y += (targetRotationY - scene.rotation.y) * 0.05;
+                scene.rotation.x += (targetRotationX - scene.rotation.x) * 0.05;
+            }
+
+            // Animate objects (only if not being dragged)
+            const time = Date.now() * 0.001;
+            objects3D.forEach(object => {
+                if (object !== selectedObject) {
+                    // Gentle floating
+                    const floatY = Math.sin(time * object.userData.floatSpeed + object.userData.floatOffset) * 0.1;
+                    object.position.y += floatY * 0.01;
+                    
+                    // Slight drift
+                    object.position.x += object.userData.driftX * 0.01;
+                    object.position.z += object.userData.driftY * 0.01;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
